@@ -23,21 +23,18 @@ def dpa_byte(index, pts, traces):
 
     you are supposed to do one byte in the plaintext
     """
-
     # TODO
     mean_diffs = np.zeros(256)
     for key_guess in range(256):
         left = []
         right = []
-        trace_index = 0
-        for x_i in pts:
-            x_i = x_i[index] # get the byte of the plaintext
+        for i in range(pts.shape[0]):
+            x_i = pts[i,:][index] # get the byte of the plaintext
             v_i_star = sbox[x_i ^ key_guess] # apply the prediction
             if v_i_star % 2 == 1: # If LSB = 1 => modulo 2 returns 1
-                left.append(traces[trace_index,:])
+                left.append(traces[i,:])
             else:
-                right.append(traces[trace_index,:])
-            trace_index += 1
+                right.append(traces[i,:])
         left_avg = np.asarray(left).mean(axis=0)
         right_avg = np.asarray(right).mean(axis=0)
         mean_diffs[key_guess] = np.max(abs(left_avg-right_avg))
