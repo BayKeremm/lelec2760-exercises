@@ -9,9 +9,13 @@ def preprocess_traces(traces):
     traces: raw traces.
     return: return the preprocessed set of traces
     """
+    
+    ret = traces.copy()
     for i in range(traces.shape[0]):
-        traces[i, :] -= np.mean(traces[i, :])
-    return traces
+        #plot_traces(traces[i,:])
+        ret[i, :] -= np.mean(traces[i, :])
+        #plot_traces(traces[i,:])
+    return ret
 
 
 def dpa_byte(index, pts, traces):
@@ -24,21 +28,23 @@ def dpa_byte(index, pts, traces):
     you are supposed to do one byte in the plaintext
     """
     # TODO
-    mean_diffs = np.zeros(256)
+    mean_diffs  = []
     for key_guess in range(256):
-        left = []
-        right = []
-        for i in range(pts.shape[0]):
+        set0 = []
+        set1 = []
+        for i in range(traces.shape[0]):
             x_i = pts[i,:][index] # get the byte of the plaintext
             v_i_star = sbox[x_i ^ key_guess] # apply the prediction
+            trace = traces[i,:]
             if v_i_star % 2 == 1: # If LSB = 1 => modulo 2 returns 1
-                left.append(traces[i,:])
+                set0.append(trace)
             else:
-                right.append(traces[i,:])
-        left_avg = np.asarray(left).mean(axis=0)
-        right_avg = np.asarray(right).mean(axis=0)
-        mean_diffs[key_guess] = np.max(abs(left_avg-right_avg))
+                set1.append(trace)
+        set0_avg = np.asarray(set0).mean(axis=0)
+        set1_avg = np.asarray(set1).mean(axis=0)
+        mean_diffs.append(np.max(abs(set0_avg-set1_avg)))
 
+    # sort i from 0 to 255 with key mean_diffs[i]
     return np.array(sorted(range(len(mean_diffs)), key=lambda i: mean_diffs[i], reverse=True))
 
 
@@ -80,8 +86,8 @@ if __name__ == "__main__":
 
     # Uncomment the next line to plot the first trace
     #plot_traces(traces[0,:])
-    ##print(traces[0,:].shape) # (16_000 ,)
-    ##print(traces.shape) # (100,16_000)
+    #print(traces[0,:].shape) # (16_000 ,)
+    #print(traces.shape) # (100,16_000)
 
     
     #plot_traces(traces[0,:])
