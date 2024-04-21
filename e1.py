@@ -9,12 +9,13 @@ def preprocess_traces(traces):
     traces: raw traces.
     return: return the preprocessed set of traces
     """
-    
+    #return traces
+
     ret = traces.copy()
     for i in range(traces.shape[0]):
         #plot_traces(traces[i,:])
         ret[i, :] -= np.mean(traces[i, :])
-        #plot_traces(traces[i,:])
+        #plot_traces(ret[i,:])
     return ret
 
 
@@ -24,9 +25,8 @@ def dpa_byte(index, pts, traces):
     pts: the plaintext of each encryption performed.
     traces: the power measurements performed for each encryption.
     return: an np.array with the key bytes, from highest probable to less probable
-
-    you are supposed to do one byte in the plaintext
     """
+
     # TODO
     mean_diffs  = []
     for key_guess in range(256):
@@ -35,11 +35,11 @@ def dpa_byte(index, pts, traces):
         for i in range(traces.shape[0]):
             x_i = pts[i,:][index] # get the byte of the plaintext
             v_i_star = sbox[x_i ^ key_guess] # apply the prediction
-            trace = traces[i,:]
+            trace = traces[i,:] # (16000,)
             if v_i_star % 2 == 1: # If LSB = 1 => modulo 2 returns 1
-                set0.append(trace)
-            else:
                 set1.append(trace)
+            else:
+                set0.append(trace)
         set0_avg = np.asarray(set0).mean(axis=0)
         set1_avg = np.asarray(set1).mean(axis=0)
         mean_diffs.append(np.max(abs(set0_avg-set1_avg)))
@@ -75,10 +75,11 @@ if __name__ == "__main__":
     dataset = load_npz("attack_set_known_key.npz")
     plaintexts = dataset["xbyte"]
     keys = dataset["kv"]
+
     traces = dataset["traces"].astype(float)
 
     # Amount trace taken
-    am_tr = min(100, plaintexts.shape[0])
+    am_tr = min(1200, plaintexts.shape[0])
 
     plaintexts = plaintexts[:am_tr, :]
     keys = keys[:am_tr, :]
@@ -86,15 +87,9 @@ if __name__ == "__main__":
 
     # Uncomment the next line to plot the first trace
     #plot_traces(traces[0,:])
-    #print(traces[0,:].shape) # (16_000 ,)
-    #print(traces.shape) # (100,16_000)
-
-    
-    #plot_traces(traces[0,:])
 
     # Preprocess traces
-    traces = preprocess_traces(traces)
-    #plot_traces(traces[0,:])
+    traces = preprocess_traces(traces[:,2600:3900])
 
     # Run the attack
     # Indexes of byte to attack
