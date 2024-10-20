@@ -1,8 +1,10 @@
 import numpy as np
 from utils_ps3 import load_npz
 from e1 import preprocess_traces, sbox
-from e2 import pearson_corr, hw
+from e2 import pearson_corr, hamw
 import matplotlib.pyplot as plt
+from tqdm import tqdm
+from scipy.stats import norm
 
 def training_phase(index, time_idx, pts, ks, trs):
     """
@@ -15,8 +17,24 @@ def training_phase(index, time_idx, pts, ks, trs):
         us: is a numpy array containing the mean of each class
         ss: is a numpy array containing the standard deviation of each class
     """
-    
-    return [np.arange(256), np.arange(256)]
+    means = np.arange(256)
+    stds = np.arange(256)
+    nb_traces = trs.shape[0]
+    for s_box_out in range(256):
+        traces = []
+        for key_idx in range(nb_traces):
+            key = ks[key_idx,:][index]
+            pt = pts[key_idx,:][index]
+            if s_box_out == sbox[key ^ pt]:
+                traces.append(trs[key_idx,:][time_idx])
+
+        traces = np.asarray(traces)
+        mu_i = np.mean(traces,axis=0)
+        sigma_i = np.std(traces,axis=0)
+
+        means[s_box_out] = mu_i
+        stds[s_box_out] = sigma_i
+    return [means, stds]
 
 def online_phase(index, time_idx, models, atck_pts, atck_trs):
     """
@@ -26,9 +44,26 @@ def online_phase(index, time_idx, models, atck_pts, atck_trs):
     atck_pts: plaintexts used in the attack set
     atck_trs: traces of the attack set
     return: a numpy array containing the probability of each byte value.
+
+    assume covariance is equal to zero
+    if you increase num of dimensions => more traces to estimate covariance
+
     """
-    
-    return np.zeros(256)
+
+    nb_traces = atck_trs.shape[0]
+    nb_samples = atck_trs.shape[1]
+    probabilities = np.zeros(256)
+    for i in range(nb_traces):
+        l = atck_trs[i,:][time_idx]
+        pt = atck_pts[i,:][index]
+        for key_guess in range(256):
+            s_box_out = sbox[pt ^ key_guess]
+            mu_i = models[0][s_box_out]
+            sigma_i = models[1][s_box_out]
+            d = norm(mu_i, sigma_i)
+            probabilities[key_guess] += np.log(d.pdf(l))
+
+    return probabilities 
 
 
 def ta_byte(index, train_pts, train_ks, train_trs, atck_pts, atck_trs):
@@ -41,8 +76,24 @@ def ta_byte(index, train_pts, train_ks, train_trs, atck_pts, atck_trs):
     atck_trs: traces of the attack set
     return: a np.array with the key bytes, from highest probable to less probable
     """
-    
-    return np.arange(256)
+    nb_traces =  train_trs.shape[0]
+    nb_samples = train_trs.shape[1]
+    weights = []
+
+    for i in range(nb_traces):
+        x_i = train_pts[i,:][index]
+        k_i = train_ks[i,:][index]
+        v_i = sbox[x_i ^ k_i] 
+        hw = hamw(v_i)
+        weights.append(np.full(nb_samples,hw))
+
+    p_corr = pearson_corr(weights,train_trs)
+
+    poi = np.argmax(abs(p_corr))
+    models = training_phase(index, poi, train_pts, train_ks, train_trs)
+    probabilities = online_phase(index, poi, models, atck_pts, atck_trs)
+
+    return np.array(sorted(range(len(probabilities)), key=lambda i: probabilities[i], reverse=True))
 
 
 def run_full_ta_known_key(
@@ -73,7 +124,7 @@ if __name__ == "__main__":
     train_dataset = load_npz("training_set.npz")
     train_plaintexts = train_dataset["xbyte"]
     train_keys = train_dataset["kv"]
-    train_traces = train_dataset["traces"].astype(np.float)
+    train_traces = train_dataset["traces"].astype(float)
 
     am_train_tr = min(10000, train_plaintexts.shape[0])
     train_plaintexts = train_plaintexts[:am_train_tr, :]
@@ -84,15 +135,15 @@ if __name__ == "__main__":
     atck_dataset = load_npz("attack_set_known_key.npz")
     atck_plaintexts = atck_dataset["xbyte"]
     atck_key = atck_dataset["kv"][0, :]
-    atck_traces = atck_dataset["traces"].astype(np.float)
+    atck_traces = atck_dataset["traces"].astype(float)
 
-    am_atck_tr = min(40, atck_traces.shape[0])
+    am_atck_tr = min(33, atck_traces.shape[0])
     atck_plaintexts = atck_plaintexts[:am_atck_tr, :]
     atck_traces = atck_traces[:am_atck_tr, :]
 
     # Preprocess traces
-    train_traces = preprocess_traces(train_traces)
-    atck_traces = preprocess_traces(atck_traces)
+    train_traces = preprocess_traces(train_traces[:,2600:3900])
+    atck_traces = preprocess_traces(atck_traces[:,2600:3900])
 
     # Run the attack
     # Indexes of byte to attack

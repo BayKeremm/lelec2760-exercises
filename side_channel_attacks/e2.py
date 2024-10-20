@@ -4,9 +4,16 @@ from e1 import  preprocess_traces#,AK_SB_1byte
 import matplotlib.pyplot as plt
 import tqdm
 
-hw = load_npz("HW.npz")["HW"][0]
 
 sbox = load_npz("AES_Sbox.npz")["AES_Sbox"][0]
+
+def hamw(v):
+    c = 0
+    while v:
+        c += 1
+        v &= v - 1
+
+    return c
 
 def pearson_corr(x, y):
     """
@@ -55,20 +62,13 @@ def cpa_byte_out_sbox(index, pts, traces):
         for i in range(nb_traces):
             x_i = pts[i,:][index] # get the byte of the plaintext
             v_i_star = sbox[x_i ^ key_guess] # apply the prediction
-            hw = HW(v_i_star)
+            hw = hamw(v_i_star)
             weights.append(np.full(nb_samples,hw))
         p_corr = pearson_corr(weights,traces)
         coeffs.append(np.max(abs(p_corr)))
 
     return np.array(sorted(range(len(coeffs)), key=lambda i: coeffs[i], reverse=True))
 
-def HW(v):
-    c = 0
-    while v:
-        c += 1
-        v &= v - 1
-
-    return c
 
 '''
 linear model on a linear operation
@@ -96,7 +96,7 @@ def cpa_byte_in_sbox(index, pts, traces):
         for i in range(nb_traces):
             x_i = pts[i,:][index] # get the byte of the plaintext
             v_i_star = x_i ^ key_guess # apply the prediction
-            hw = HW(v_i_star)
+            hw = hamw(v_i_star)
             weights.append(np.full(nb_samples,hw))
         p_corr = pearson_corr(weights,traces)
         coeffs.append(np.max(abs(p_corr)))
